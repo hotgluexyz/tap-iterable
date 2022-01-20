@@ -18,10 +18,10 @@ logging.getLogger('backoff').setLevel(logging.CRITICAL)
 """ Simple wrapper for Iterable. """
 class Iterable(object):
 
-  def __init__(self, api_key, start_date=None, api_window_in_days=30):
+  def __init__(self, api_key, start_date=None, api_window_in_days=None):
     self.api_key = api_key
     self.uri = "https://api.iterable.com/api/"
-    self.api_window_in_days = float(api_window_in_days)
+    self.api_window_in_days = float(api_window_in_days) if api_window_in_days else None
     self.MAX_BYTES = 10240
     self.CHUNK_SIZE = 512
 
@@ -102,6 +102,7 @@ class Iterable(object):
         "listId": l["id"]
       }
       users = self._get("lists/getUsers", **kwargs)
+      users = users.text.rstrip("\n").split("\n")
       for user in users:
         yield {
           "email": user,
@@ -160,9 +161,16 @@ class Iterable(object):
   def get_data_export_generator(self, data_type_name, bookmark=None):
     now = self._now()
     kwargs = {}
-    for start_date_time in self._daterange(bookmark, now):
-      kwargs["startDateTime"] = start_date_time
-      kwargs["endDateTime"] = self._get_end_datetime(startDateTime=start_date_time)
-      def get_data():
-        return self._get("export/data.json", dataTypeName=data_type_name, **kwargs), kwargs['endDateTime']
+
+    def get_data():
+      return self._get("export/data.json", dataTypeName=data_type_name, **kwargs), kwargs["endDateTime"]
+
+    if not self.api_window_in_days:
+      kwargs["startDateTime"] = utils.strptime_with_tz(bookmark).strftime('%Y-%m-%d 00:00:00')
+      kwargs["endDateTime"] = datetime.utcnow().strftime('%Y-%m-%d 00:00:00')
       yield get_data
+    else:
+      for start_date_time in self._daterange(bookmark, now):
+        kwargs["startDateTime"] = start_date_time
+        kwargs["endDateTime"] = self._get_end_datetime(startDateTime=start_date_time)
+        yield get_data
