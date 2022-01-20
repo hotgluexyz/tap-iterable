@@ -102,6 +102,7 @@ class Iterable(object):
         "listId": l["id"]
       }
       users = self._get("lists/getUsers", **kwargs)
+      users = users.text.rstrip("\n").split("\n")
       for user in users:
         yield {
           "email": user,
